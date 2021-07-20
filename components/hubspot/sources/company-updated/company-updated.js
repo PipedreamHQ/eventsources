@@ -2,27 +2,29 @@ const common = require("../common.js");
 
 module.exports = {
   ...common,
-  key: "hubspot-contact-updated",
-  name: "Contact Updated",
-  description: "Emits an event each time a contact is updated.",
-  version: "0.0.3",
+  key: "hubspot-company-updated",
+  name: "Company Updated",
+  description: "Emits an event each time a company is updated.",
+  version: "0.0.1",
+  dedupe: "unique",
+  hooks: {},
   methods: {
     ...common.methods,
-    generateMeta(contact) {
+    generateMeta(company) {
       const {
         id,
         properties,
         updatedAt,
-      } = contact;
+      } = company;
       const ts = Date.parse(updatedAt);
       return {
         id: `${id}${ts}`,
-        summary: `${properties.firstname} ${properties.lastname}`,
+        summary: properties.name,
         ts,
       };
     },
-    isRelevant(contact, updatedAfter) {
-      return Date.parse(contact.updatedAt) > updatedAfter;
+    isRelevant(company, updatedAfter) {
+      return Date.parse(company.updatedAt) > updatedAfter;
     },
     getParams() {
       return {
@@ -33,8 +35,7 @@ module.exports = {
             direction: "DESCENDING",
           },
         ],
-        properties: this._getProperties(),
-        object: "contacts",
+        object: "companies",
       };
     },
     async processResults(after, params) {

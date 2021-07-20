@@ -16,10 +16,16 @@ module.exports = {
         };
         const results = await this.getLists(params);
         const options = results.map((result) => {
-          const { name: label, listId } = result;
+          const {
+            name: label,
+            listId,
+          } = result;
           return {
             label,
-            value: JSON.stringify({ label, value: listId }),
+            value: JSON.stringify({
+              label,
+              value: listId,
+            }),
           };
         });
         return {
@@ -37,10 +43,16 @@ module.exports = {
       async options() {
         const results = await this.getDealStages();
         const options = results.results[0].stages.map((result) => {
-          const { label, stageId } = result;
+          const {
+            label,
+            stageId,
+          } = result;
           return {
             label,
-            value: JSON.stringify({ label, value: stageId }),
+            value: JSON.stringify({
+              label,
+              value: stageId,
+            }),
           };
         });
         return options;
@@ -50,7 +62,7 @@ module.exports = {
       type: "string",
       label: "Object Type",
       description: "Watch for new events concerning the object type specified.",
-      async options(opts) {
+      async options() {
         return [
           {
             label: "Companies",
@@ -81,22 +93,29 @@ module.exports = {
         else objectType = `${opts.objectType}s`;
         const results = await this.getObjects(objectType);
         const options = results.map((result) => {
-          const { id, properties } = result;
+          const {
+            id,
+            properties,
+          } = result;
+          let label;
           switch (objectType) {
-            case "companies":
-              label = properties.name;
-              break;
-            case "contacts":
-              label = `${properties.firstname} ${properties.lastname}`;
-              break;
-            case "deals":
-              label = properties.dealname;
-              break;
-            case "tickets":
-              label = properties.subject;
-              break;
+          case "companies":
+            label = properties.name;
+            break;
+          case "contacts":
+            label = `${properties.firstname} ${properties.lastname}`;
+            break;
+          case "deals":
+            label = properties.dealname;
+            break;
+          case "tickets":
+            label = properties.subject;
+            break;
           }
-          return { label, value: id };
+          return {
+            label,
+            value: id,
+          };
         });
         return options;
       },
@@ -113,10 +132,16 @@ module.exports = {
         };
         const results = await this.getForms();
         const options = results.map((result) => {
-          const { name: label, guid } = result;
+          const {
+            name: label,
+            guid,
+          } = result;
           return {
             label,
-            value: JSON.stringify({ label, value: guid }),
+            value: JSON.stringify({
+              label,
+              value: guid,
+            }),
           };
         });
         return {
@@ -127,6 +152,26 @@ module.exports = {
         };
       },
     },
+    channel: {
+      type: "string",
+      label: "Social Media Channel",
+      async options() {
+        const channels = await this.getPublishingChannels();
+        const options = channels.map((channel) => {
+          const {
+            accountType,
+            username,
+            channelKey: value,
+          } = channel;
+          const label = `${accountType} ${username}`;
+          return {
+            label,
+            value,
+          };
+        });
+        return options;
+      },
+    },
   },
   methods: {
     _getBaseURL() {
@@ -134,7 +179,7 @@ module.exports = {
     },
     _getHeaders() {
       return {
-        Authorization: `Bearer ${this.$auth.oauth_access_token}`,
+        "Authorization": `Bearer ${this.$auth.oauth_access_token}`,
         "Content-Type": "application/json",
       };
     },
@@ -152,7 +197,9 @@ module.exports = {
       };
       return (await axios(config)).data;
     },
-    async searchCRM({ object, ...data }) {
+    async searchCRM({
+      object, ...data
+    }) {
       const config = {
         method: "POST",
         url: `${this._getBaseURL()}/crm/v3/objects/${object}/search`,
@@ -165,7 +212,7 @@ module.exports = {
       return await this.makeGetRequest("/cms/v3/blogs/posts", params);
     },
     async getCalendarTasks(endDate) {
-      params = {
+      const params = {
         startDate: Date.now(),
         endDate,
       };
@@ -190,7 +237,7 @@ module.exports = {
     async getEngagements(params) {
       return await this.makeGetRequest(
         "/engagements/v1/engagements/paged",
-        params
+        params,
       );
     },
     async getEvents(params) {
@@ -204,7 +251,7 @@ module.exports = {
       delete params.formId;
       return await this.makeGetRequest(
         `/form-integrations/v1/submissions/forms/${formId}`,
-        params
+        params,
       );
     },
     async getLists(params) {
@@ -214,7 +261,7 @@ module.exports = {
     async getListContacts(params, listId) {
       return await this.makeGetRequest(
         `/contacts/v1/lists/${listId}/contacts/all`,
-        params
+        params,
       );
     },
     async getObjects(objectType) {
@@ -226,7 +273,7 @@ module.exports = {
       while (!results || params.next) {
         results = await this.makeGetRequest(
           `/crm/v3/objects/${objectType}`,
-          params
+          params,
         );
         if (results.paging) params.next = results.paging.next.after;
         else delete params.next;
@@ -242,8 +289,32 @@ module.exports = {
       };
       return await this.makeGetRequest(
         `/crm/v3/objects/contacts/${contactId}`,
-        params
+        params,
       );
+    },
+    async getLineItem(lineItemId) {
+      return await this.makeGetRequest(`/crm/v3/objects/line_items/${lineItemId}`);
+    },
+    getCRMObjects() {
+      return [
+        "companies",
+        "contacts",
+        "deals",
+        "products",
+        "tickets",
+        "line_items",
+        "quotes",
+        "custom_objects",
+      ];
+    },
+    async getPublishingChannels() {
+      return await this.makeGetRequest("/broadcast/v1/channels/setting/publish/current");
+    },
+    async getBroadcastMessages(params) {
+      return await this.makeGetRequest("/broadcast/v1/broadcasts", params);
+    },
+    async getEmailSubscriptionsTimeline(params) {
+      return await this.makeGetRequest("/email/public/v1/subscriptions/timeline", params);
     },
   },
 };

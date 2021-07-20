@@ -5,17 +5,32 @@ module.exports = {
   key: "hubspot-new-deal-in-stage",
   name: "New Deal In Stage",
   description: "Emits an event for each new deal in a stage.",
-  version: "0.0.2",
+  version: "0.0.3",
   dedupe: "unique",
   hooks: {},
   props: {
     ...common.props,
-    stages: { propDefinition: [common.props.hubspot, "stages"] },
+    stages: {
+      propDefinition: [
+        common.props.hubspot,
+        "stages",
+      ],
+    },
   },
   methods: {
     ...common.methods,
+    _getStage() {
+      return this.db.get("stage");
+    },
+    _setStage(stage) {
+      this.db.set("stage", stage);
+    },
     generateMeta(deal, stage) {
-      const { id, properties, updatedAt } = deal;
+      const {
+        id,
+        properties,
+        updatedAt,
+      } = deal;
       const { label } = stage;
       const ts = Date.parse(updatedAt);
       return {
@@ -25,21 +40,18 @@ module.exports = {
       };
     },
     emitEvent(deal) {
-      const stage = this.db.get("stage");
+      const stage = this._getStage();
       const meta = this.generateMeta(deal, stage);
       this.$emit(deal, meta);
     },
     isRelevant(deal, updatedAfter) {
       return Date.parse(deal.updatedAt) > updatedAfter;
     },
-  },
-  async run(event) {
-    const updatedAfter = this._getAfter();
-
-    for (let stage of this.stages) {
-      stage = JSON.parse(stage);
-      this.db.set("stage", stage);
-      const data = {
+    getParams() {
+      return null;
+    },
+    getStageParams(stage) {
+      return {
         limit: 100,
         filters: [
           {
@@ -56,15 +68,14 @@ module.exports = {
         ],
         object: "deals",
       };
-
-      await this.paginate(
-        data,
-        this.hubspot.searchCRM.bind(this),
-        "results",
-        updatedAfter
-      );
-    }
-
-    this._setAfter(Date.now());
+    },
+    async processResults(after) {
+      for (let stage of this.stages) {
+        stage = JSON.parse(stage);
+        this._setStage(stage);
+        const params = this.getStageParams(stage);
+        await this.searchCRM(params, after);
+      }
+    },
   },
 };

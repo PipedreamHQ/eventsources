@@ -16,7 +16,7 @@ module.exports = {
       // By default, only a limited set of properties are returned from the API.
       // Get all possible contact properties to request for each contact.
       const properties = await this.hubspot.createPropertiesArray();
-      this.db.set("properties", properties);
+      this._setProperties(properties);
     },
   },
   methods: {
@@ -25,6 +25,12 @@ module.exports = {
     },
     _setAfter(after) {
       this.db.set("after", after);
+    },
+    _getProperties() {
+      return this.db.get("properties");
+    },
+    _setProperties(properties) {
+      this.db.set("properties", properties);
     },
     async paginate(params, resourceFn, resultType = null, after = null) {
       let results = null;
@@ -48,7 +54,7 @@ module.exports = {
       params,
       resourceFn,
       resultType = null,
-      after = null
+      after = null,
     ) {
       let hasMore = true;
       let results, items;
@@ -67,8 +73,28 @@ module.exports = {
       const meta = this.generateMeta(result);
       this.$emit(result, meta);
     },
-    isRelevant(result, after) {
+    isRelevant() {
       return true;
     },
+    getParams() {
+      throw new Error("getParams not implemented");
+    },
+    processResults() {
+      throw new Error("paginateResults not implemented");
+    },
+    async searchCRM(params, after) {
+      await this.paginate(
+        params,
+        this.hubspot.searchCRM.bind(this),
+        "results",
+        after,
+      );
+    },
+  },
+  async run() {
+    const after = this._getAfter();
+    const params = this.getParams(after);
+    await this.processResults(after, params);
+    this._setAfter(Date.now());
   },
 };

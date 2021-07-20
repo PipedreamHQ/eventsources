@@ -2,29 +2,29 @@ const common = require("../common.js");
 
 module.exports = {
   ...common,
-  key: "hubspot-new-deal",
-  name: "New Deals",
-  description: "Emits an event for each new deal created.",
-  version: "0.0.3",
+  key: "hubspot-new-product",
+  name: "New Products",
+  description: "Emits an event for each new product created.",
+  version: "0.0.1",
   dedupe: "unique",
   hooks: {},
   methods: {
     ...common.methods,
-    generateMeta(deal) {
+    generateMeta(product) {
       const {
         id,
         properties,
         createdAt,
-      } = deal;
+      } = product;
       const ts = Date.parse(createdAt);
       return {
         id,
-        summary: properties.dealname,
+        summary: properties.name,
         ts,
       };
     },
-    isRelevant(deal, createdAfter) {
-      return Date.parse(deal.createdAt) > createdAfter;
+    isRelevant(product, createdAfter) {
+      return Date.parse(product.createdAt) > createdAfter;
     },
     getParams() {
       return {
@@ -35,7 +35,7 @@ module.exports = {
             direction: "DESCENDING",
           },
         ],
-        object: "deals",
+        object: "products",
       };
     },
     async processResults(after, params) {

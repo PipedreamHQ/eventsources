@@ -5,16 +5,23 @@ module.exports = {
   key: "hubspot-new-event",
   name: "New Events",
   description: "Emits an event for each new Hubspot event.",
-  version: "0.0.2",
+  version: "0.0.3",
   dedupe: "unique",
   props: {
     ...common.props,
-    objectType: { propDefinition: [common.props.hubspot, "objectType"] },
+    objectType: {
+      propDefinition: [
+        common.props.hubspot,
+        "objectType",
+      ],
+    },
     objectIds: {
       propDefinition: [
         common.props.hubspot,
         "objectIds",
-        (c) => ({ objectType: c.objectType }),
+        (c) => ({
+          objectType: c.objectType,
+        }),
       ],
     },
   },
@@ -22,33 +29,37 @@ module.exports = {
   methods: {
     ...common.methods,
     generateMeta(result) {
-      const { id, eventType } = result;
+      const {
+        id,
+        eventType,
+      } = result;
       return {
         id,
         summary: eventType,
         ts: Date.now(),
       };
     },
-  },
-  async run(event) {
-    const occurredAfter = this._getAfter();
-
-    for (const objectId of this.objectIds) {
-      const params = {
+    getParams() {
+      return null;
+    },
+    getEventParams(objectId, occurredAfter) {
+      return {
         limit: 100,
         objectType: this.objectType,
         objectId,
         occurredAfter,
       };
-
-      await this.paginate(
-        params,
-        this.hubspot.getEvents.bind(this),
-        "results",
-        occurredAfter
-      );
-    }
-
-    this._setAfter(Date.now());
+    },
+    async processResults(after) {
+      for (const objectId of this.objectIds) {
+        const params = this.getEventParams(objectId, after);
+        await this.paginate(
+          params,
+          this.hubspot.getEvents.bind(this),
+          "results",
+          after,
+        );
+      }
+    },
   },
 };
