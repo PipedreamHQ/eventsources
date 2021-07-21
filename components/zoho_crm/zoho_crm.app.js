@@ -1,4 +1,5 @@
 const axios = require("axios");
+const retry = require("async-retry");
 
 module.exports = {
   type: "app",
@@ -9,6 +10,13 @@ module.exports = {
     },
     _apiUrl() {
       return "https://www.zohoapis.com/crm/v2";
+    },
+    _isRetriableStatusCode(statusCode) {
+      [408, 429, 500].includes(statusCode);
+    },
+    _leadsUrl() {
+      const baseUrl = this._apiUrl();
+      return `${baseUrl}/Leads`;
     },
     _metadataUrl() {
       const baseUrl = this._apiUrl();
@@ -26,12 +34,43 @@ module.exports = {
     _makeRequestConfig() {
       const authToken = this._authToken();
       const headers = {
-        "Authorization": `Zoho-oauthtoken ${authToken}`,
+        Authorization: `Zoho-oauthtoken ${authToken}`,
         "User-Agent": "@PipedreamHQ/pipedream v0.1",
       };
       return {
         headers,
       };
+    },
+    async _withRetries(apiCall) {
+      const retryOpts = {
+        retries: 5,
+        factor: 2,
+      };
+      return retry(async (bail) => {
+        try {
+          return await apiCall();
+        } catch (err) {
+          const statusCode = get(err, ["response", "status"]);
+          if (!this._isRetriableStatusCode(statusCode)) {
+            bail(`
+              Unexpected error (status code: ${statusCode}):
+              ${JSON.stringify(err.response, null, 2)}
+            `);
+          }
+          console.warn(`Temporary error: ${err.message}`);
+          throw err;
+        }
+      }, retryOpts);
+    },
+    async convertLead(recordId, body) {
+      const url = `${this._leadsUrl()}/${recordId}/actions/convert`;
+      const requestConfig = this._makeRequestConfig();
+      const requestData = {};
+      requestData.data = body;
+      const { data } = await this._withRetries(() =>
+        axios.post(url, requestData, requestConfig)
+      );
+      return data;
     },
     async genericApiGetCall(url, params = {}) {
       const baseRequestConfig = this._makeRequestConfig();
@@ -61,10 +100,7 @@ module.exports = {
      * 200.
      * @returns The users API page number where new records would be contained
      */
-    computeLastUsersPage({
-      userCount = 0,
-      pageSize = this.usersPageSize(),
-    }) {
+    computeLastUsersPage({ userCount = 0, pageSize = this.usersPageSize() }) {
       return 1 + Math.floor(userCount / pageSize);
     },
     /**
@@ -85,10 +121,7 @@ module.exports = {
      * @returns The number of records at the beginning of the users page that
      * were already processed and can be skipped
      */
-    computeUsersOffset({
-      userCount = 0,
-      pageSize = this.usersPageSize(),
-    }) {
+    computeUsersOffset({ userCount = 0, pageSize = this.usersPageSize() }) {
       return userCount % pageSize;
     },
     async getUserCount({ type }) {
@@ -98,13 +131,12 @@ module.exports = {
         page_size: pageSize,
         type,
       };
-      const { info: { count: userCount } } = await this.genericApiGetCall(url, params);
+      const {
+        info: { count: userCount },
+      } = await this.genericApiGetCall(url, params);
       return userCount;
     },
-    async *getUsers({
-      page = 1,
-      type,
-    }) {
+    async *getUsers({ page = 1, type }) {
       const url = this._usersUrl();
       let moreRecords = false;
       let params = {
@@ -112,10 +144,7 @@ module.exports = {
         type,
       };
       do {
-        const {
-          users,
-          info,
-        } = await this.genericApiGetCall(url, params);
+        const { users, info } = await this.genericApiGetCall(url, params);
         for (const user of users) {
           yield user;
         }
@@ -134,13 +163,7 @@ module.exports = {
       return data;
     },
     async createHook(opts) {
-      const {
-        token,
-        notifyUrl,
-        channelId,
-        channelExpiry,
-        events,
-      } = opts;
+      const { token, notifyUrl, channelId, channelExpiry, events } = opts;
 
       const url = this._watchActionsUrl();
       const requestConfig = this._makeRequestConfig();
@@ -178,12 +201,7 @@ module.exports = {
       await axios.delete(url, requestConfig);
     },
     async renewHookSubscription(opts) {
-      const {
-        channelId,
-        channelExpiry,
-        events,
-        token,
-      } = opts;
+      const { channelId, channelExpiry, events, token } = opts;
       const url = this._watchActionsUrl();
       const requestConfig = this._makeRequestConfig();
 
