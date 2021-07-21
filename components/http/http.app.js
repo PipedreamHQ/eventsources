@@ -1,6 +1,6 @@
 module.exports = {
-  type: 'app',
-  app: 'http',
+  type: "app",
+  app: "http",
   propDefinitions: {
     url: {
       type: "string",
@@ -9,18 +9,26 @@ module.exports = {
     method: {
       type: "string",
       options: [
-        'GET',
-        'POST',
-        'PUT',
-        'PATCH',
-        'DELETE',
-        'HEAD',
-        'OPTIONS',
-      ]
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "COPY",
+        "HEAD",
+        "OPTIONS",
+        "LINK",
+        "UNLINK",
+        "PURGE",
+        "LOCK",
+        "UNLOCK",
+        "PROPFIND",
+        "VIEW",
+      ],
     },
-    body: { 
+    body: {
       type: "string",
-      description: "Enter a static value or reference prior step exports via the `steps` object (e.g., `{{steps.foo.$return_value}}`).",
+      description: "Enter a string or add an expression in curly brackets `{{...}}`. To reference data from an earlier step, enter it in curly brackets (e.g., `{{steps.foo.$return_value}}`).",
       optional: true,
     },
     params: {
@@ -30,34 +38,23 @@ module.exports = {
     },
     headers: {
       type: "object",
-      description: "Add individual headers as key-value pairs or disable structured mode to pass multiple key-value pairs as an object.",
+      description: "Add headers as key-value pairs",
       optional: true,
     },
     auth: {
-      type: "string",
-      label: "Basic Auth",
-      description: "To use HTTP basic authentication, enter a username and password separated by `|` (e.g., `myUsername|myPassword`).",
+      type: "object",
       optional: true,
     },
     responseType: {
       type: "string",
       options: [
-        'json',
-        'arraybuffer',
-        'document',
-        'text',
-        'stream'
+        "json",
+        "arraybuffer",
+        "document",
+        "text",
+        "stream",
       ],
       optional: true,
-    }
+    },
   },
-  methods: {
-    parseAuth(authString) {
-      const authArray = authString.split("|")
-      return {
-        username: authArray[0],
-        password: authArray[1]
-      }
-    }
-  }
-}
+};

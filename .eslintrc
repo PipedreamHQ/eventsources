@@ -147,7 +147,14 @@
       "error",
       "consistent"
     ],
-    "quotes": "error",
+    "quotes": [
+      "error",
+      "double",
+      {
+        "allowTemplateLiterals": true,
+        "avoidEscape": true
+      }
+    ],
     "semi": "error",
     "space-before-blocks": [
       "error",
