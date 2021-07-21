@@ -22,9 +22,7 @@ module.exports = {
       label: "Template",
       async options({ account }) {
         const baseUri = await this.getBaseUri(account);
-        const { envelopeTemplates } = await this.listTemplates(
-          baseUri,
-        );
+        const { envelopeTemplates } = await this.listTemplates(baseUri);
         return envelopeTemplates.map((template) => {
           return {
             label: template.name,
@@ -59,8 +57,7 @@ module.exports = {
       label: "Recipient Role",
       description: "Choose role as defined on template or use a custom value",
       async options({
-        account,
-        template,
+        account, template,
       }) {
         const baseUri = await this.getBaseUri(account);
         const { signers } = await this.listTemplateRecipients(
@@ -81,12 +78,17 @@ module.exports = {
       };
     },
     async _makeRequest(method, url, data = null, params = null) {
+      if (params) {
+        const queryString = Object.keys(params)
+          .map((key) => key + "=" + params[key])
+          .join("&");
+        url = `${url}?${queryString}`;
+      }
       const config = {
         method,
         url,
         headers: this._getHeaders(),
         data,
-        params,
       };
       return (await axios(config)).data;
     },
@@ -103,10 +105,7 @@ module.exports = {
       return `${baseUri}/restapi/v2.1/accounts/${accountId}/`;
     },
     async listTemplates(baseUri) {
-      return await this._makeRequest(
-        "GET",
-        `${baseUri}templates`,
-      );
+      return await this._makeRequest("GET", `${baseUri}templates`);
     },
     async listTemplateRecipients(baseUri, templateId) {
       return await this._makeRequest(
@@ -115,10 +114,17 @@ module.exports = {
       );
     },
     async createEnvelope(baseUri, data) {
+      return await this._makeRequest("POST", `${baseUri}envelopes`, data);
+    },
+    async listFolders(baseUri, params) {
+      return await this._makeRequest("GET", `${baseUri}folders`, null, params);
+    },
+    async listEnvelopes(baseUri, params) {
       return await this._makeRequest(
-        "POST",
+        "GET",
         `${baseUri}envelopes`,
-        data,
+        null,
+        params,
       );
     },
   },
