@@ -47,8 +47,13 @@ module.exports = {
     // Returns a drive object authenticated with the user's access token
     drive() {
       const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: this.$auth.oauth_access_token });
-      return google.drive({ version: "v3", auth });
+      auth.setCredentials({
+        access_token: this.$auth.oauth_access_token,
+      });
+      return google.drive({
+        version: "v3",
+        auth,
+      });
     },
     // Google's push notifications provide a URL to the resource that changed,
     // which we can use to fetch the file's metadata. So we use axios here
@@ -82,7 +87,10 @@ module.exports = {
           pageToken,
         };
       }
-      const { changes, newStartPageToken } = (
+      const {
+        changes,
+        newStartPageToken,
+      } = (
         await drive.changes.list(changeRequest)
       ).data;
 
@@ -100,9 +108,9 @@ module.exports = {
       const drive = this.drive();
       const request = driveId
         ? {
-            driveId,
-            supportsAllDrives: true,
-          }
+          driveId,
+          supportsAllDrives: true,
+        }
         : {};
       const { data } = await drive.changes.getStartPageToken(request);
       return data.startPageToken;
@@ -121,14 +129,14 @@ module.exports = {
       const incomingChannelID = headers["x-goog-channel-id"];
       if (incomingChannelID !== channelID) {
         console.log(
-          `Channel ID of ${incomingChannelID} not equal to deployed component channel of ${channelID}`
+          `Channel ID of ${incomingChannelID} not equal to deployed component channel of ${channelID}`,
         );
         return false;
       }
 
       if (headers["x-goog-resource-id"] !== subscription.resourceId) {
         console.log(
-          `Resource ID of ${subscription.resourceId} not currently being tracked. Exiting`
+          `Resource ID of ${subscription.resourceId} not currently being tracked. Exiting`,
         );
         return false;
       }
@@ -139,36 +147,59 @@ module.exports = {
       channelID,
       pageToken,
       endpoint,
-      driveId
+      driveId,
     ) {
       if (subscription && subscription.resourceId) {
         console.log(
-          `Notifications for resource ${subscription.resourceId} are expiring at ${subscription.expiration}. Stopping existing sub`
+          `Notifications for resource ${subscription.resourceId} are expiring at ${subscription.expiration}. Stopping existing sub`,
         );
         await this.stopNotifications(channelID, subscription.resourceId);
       }
-      const { expiration, resourceId } = await this.watchDrive(
+      const {
+        expiration,
+        resourceId,
+      } = await this.watchDrive(
         channelID,
         endpoint,
         pageToken,
-        driveId === "myDrive" ? null : driveId
+        driveId === "myDrive"
+          ? null
+          : driveId,
       );
-      return { expiration, resourceId };
+      return {
+        expiration,
+        resourceId,
+      };
     },
     async listDrives(pageToken) {
       const drive = this.drive();
-      const resp = await drive.drives.list({ pageToken });
-      const { drives, nextPageToken } = resp.data;
+      const resp = await drive.drives.list({
+        pageToken,
+      });
+      const {
+        drives,
+        nextPageToken,
+      } = resp.data;
       // "My Drive" isn't returned from the list of drives,
       // so we add it to the list and assign it a static
       // ID that we can refer to when we need.
-      const options = [{ label: "My Drive", value: "myDrive" }];
+      const options = [
+        {
+          label: "My Drive",
+          value: "myDrive",
+        },
+      ];
       for (const d of drives) {
-        options.push({ label: d.name, value: d.id });
+        options.push({
+          label: d.name,
+          value: d.id,
+        });
       }
       return {
         options,
-        context: { nextPageToken },
+        context: {
+          nextPageToken,
+        },
       };
     },
     async listFiles(opts) {
@@ -177,13 +208,21 @@ module.exports = {
       // mutually-exclusive options, so we accept an object of
       // opts from the caller and pass them to the list method.
       const resp = await drive.files.list(opts);
-      const { files, nextPageToken } = resp.data;
+      const {
+        files,
+        nextPageToken,
+      } = resp.data;
       const options = files.map((file) => {
-        return { label: file.name, value: file.id };
+        return {
+          label: file.name,
+          value: file.id,
+        };
       });
       return {
         options,
-        context: { nextPageToken },
+        context: {
+          nextPageToken,
+        },
       };
     },
     async listComments(fileId, startModifiedTime = null) {
@@ -228,7 +267,10 @@ module.exports = {
       // When watching for changes to an entire account, we must pass a pageToken,
       // which points to the moment in time we want to start watching for changes:
       // https://developers.google.com/drive/api/v3/manage-changes
-      const { expiration, resourceId } = (
+      const {
+        expiration,
+        resourceId,
+      } = (
         await drive.changes.watch(watchRequest)
       ).data;
       console.log(`Watch request for drive successful, expiry: ${expiration}`);
@@ -240,7 +282,10 @@ module.exports = {
     async watchFile(id, address, fileId) {
       const drive = this.drive();
       const requestBody = this._makeWatchRequestBody(id, address);
-      const { expiration, resourceId } = (
+      const {
+        expiration,
+        resourceId,
+      } = (
         await drive.files.watch({
           fileId,
           requestBody,
@@ -248,7 +293,7 @@ module.exports = {
         })
       ).data;
       console.log(
-        `Watch request for file ${fileId} successful, expiry: ${expiration}`
+        `Watch request for file ${fileId} successful, expiry: ${expiration}`,
       );
       return {
         expiration: parseInt(expiration),
@@ -265,11 +310,16 @@ module.exports = {
       // immediately after trying to stop it if we still want notifications,
       // so we squash the error, log it, and move on.
       try {
-        await drive.channels.stop({ resource: { id, resourceId } });
+        await drive.channels.stop({
+          resource: {
+            id,
+            resourceId,
+          },
+        });
         console.log(`Stopped push notifications on channel ${id}`);
       } catch (err) {
         console.error(
-          `Failed to stop channel ${id} for resource ${resourceId}: ${err}`
+          `Failed to stop channel ${id} for resource ${resourceId}: ${err}`,
         );
       }
     },
@@ -292,25 +342,32 @@ module.exports = {
     },
     async activateHook(channelID, url, drive) {
       const startPageToken = await this.getPageToken();
-      const { expiration, resourceId } = await this.watchDrive(
+      const {
+        expiration,
+        resourceId,
+      } = await this.watchDrive(
         channelID,
         url,
         startPageToken,
-        drive
+        drive,
       );
-      return { startPageToken, expiration, resourceId };
+      return {
+        startPageToken,
+        expiration,
+        resourceId,
+      };
     },
     async deactivateHook(channelID, resourceId) {
       if (!channelID) {
         console.log(
-          "Channel not found, cannot stop notifications for non-existent channel"
+          "Channel not found, cannot stop notifications for non-existent channel",
         );
         return;
       }
 
       if (!resourceId) {
         console.log(
-          "No resource ID found, cannot stop notifications for non-existent resource"
+          "No resource ID found, cannot stop notifications for non-existent resource",
         );
         return;
       }
@@ -318,41 +375,30 @@ module.exports = {
       await this.stopNotifications(channelID, resourceId);
     },
     async invokedByTimer(drive, subscription, url, channelID, pageToken) {
-      newChannelID = channelID || uuid();
-      newPageToken =
+      const newChannelID = channelID || uuid();
+      const newPageToken =
         pageToken ||
-        (await this.getPageToken(drive === "myDrive" ? null : drive));
+        (await this.getPageToken(drive === "myDrive"
+          ? null
+          : drive));
 
-      const { expiration, resourceId } = await this.checkResubscription(
+      const {
+        expiration,
+        resourceId,
+      } = await this.checkResubscription(
         subscription,
         newChannelID,
         newPageToken,
         url,
-        drive
+        drive,
       );
 
-      return { newChannelID, newPageToken, expiration, resourceId };
-    },
-    async checkResubscription(
-      subscription,
-      channelID,
-      pageToken,
-      endpoint,
-      driveId
-    ) {
-      if (subscription && subscription.resourceId) {
-        console.log(
-          `Notifications for resource ${subscription.resourceId} are expiring at ${subscription.expiration}. Stopping existing sub`
-        );
-        await this.stopNotifications(channelID, subscription.resourceId);
-      }
-      const { expiration, resourceId } = await this.watchDrive(
-        channelID,
-        endpoint,
-        pageToken,
-        driveId === "myDrive" ? null : driveId
-      );
-      return { expiration, resourceId };
+      return {
+        newChannelID,
+        newPageToken,
+        expiration,
+        resourceId,
+      };
     },
   },
 };
