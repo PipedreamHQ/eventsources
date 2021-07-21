@@ -4,19 +4,34 @@ const common = require("../common.js");
 module.exports = {
   ...common,
   name: "New Event (Instant)",
-  version: "0.0.1",
+  version: "0.0.2",
   key: "twist-new-event",
   description: "Emits an event for any new updates in a workspace",
   props: {
     ...common.props,
     channel: {
-      propDefinition: [twist, "channel", (c) => ({ workspace: c.workspace })],
+      propDefinition: [
+        twist,
+        "channel",
+        (c) => ({
+          workspace: c.workspace,
+        }),
+      ],
     },
     thread: {
-      propDefinition: [twist, "thread", (c) => ({ channel: c.channel })],
+      propDefinition: [
+        twist,
+        "thread",
+        (c) => ({
+          channel: c.channel,
+        }),
+      ],
     },
     eventType: {
-      propDefinition: [twist, "eventType"],
+      propDefinition: [
+        twist,
+        "eventType",
+      ],
     },
   },
   methods: {
@@ -30,9 +45,13 @@ module.exports = {
       };
     },
     getMeta(body) {
-      const { name, id, created } = body;
-      return {
+      const {
+        name,
         id,
+        created = Date.now(),
+      } = body;
+      return {
+        id: `${id}${created}`,
         summary: name || "New Event",
         ts: Date.parse(created),
       };
