@@ -60,6 +60,7 @@ If we don't have an integration for an app that you'd like to see, please [reque
 - [Clearbit](https://pipedream.com/apps/clearbit)
 - [ClickSend SMS](https://pipedream.com/apps/clicksend)
 - [ClickUp](https://pipedream.com/apps/clickup)
+- [Cliniko](https://pipedream.com/apps/cliniko)
 - [Clio](https://pipedream.com/apps/clio)
 - [Cloud Convert](https://pipedream.com/apps/cloud_convert)
 - [Cloudflare (API key)](https://pipedream.com/apps/cloudflare_api_key)
