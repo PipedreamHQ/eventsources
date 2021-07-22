@@ -1,19 +1,13 @@
-const microsoft_onedrive = require("../../microsoft_onedrive.app");
+const onedrive = require("../../microsoft_onedrive.app");
 const {
   MAX_INITIAL_EVENT_COUNT,
   WEBHOOK_SUBSCRIPTION_RENEWAL_SECONDS,
 } = require("./constants");
-
-function toSingleLineString(multiLineString) {
-  return multiLineString
-    .trim()
-    .replace(/\n/g, " ")
-    .replace(/\s{2,}/g, "");
-}
+const { toSingleLineString } = require("./utils");
 
 module.exports = {
   props: {
-    microsoft_onedrive,
+    onedrive,
     db: "$.service.db",
     http: {
       type: "$.interface.http",
@@ -34,17 +28,18 @@ module.exports = {
   hooks: {
     async deploy() {
       const params = this.getDeltaLinkParams();
-      const deltaLink = this.microsoft_onedrive.getDeltaLink(params);
-      const itemsStream = this.microsoft_onedrive.scanDeltaItems(deltaLink);
+      const deltaLink = this.onedrive.getDeltaLink(params);
+      const itemsStream = this.onedrive.scanDeltaItems(deltaLink);
 
       // We skip the first drive item, since it represents the root directory
       await itemsStream.next();
 
       let eventsToProcess = Math.max(MAX_INITIAL_EVENT_COUNT, 1);
       for await (const driveItem of itemsStream) {
-        if (driveItem.deleted) {
-          // We don't want to process items that were deleted from the drive
-          // since they no longer exist
+        if (!this.isItemTypeRelevant(driveItem)) {
+          // If the type of the item being processed is not relevant to the
+          // event source we want to skip it in order to avoid confusion in
+          // terms of the actual payload of the sample events
           continue;
         }
 
@@ -57,7 +52,7 @@ module.exports = {
     async activate() {
       await this._createNewSubscription();
       const deltaLinkParams = this.getDeltaLinkParams();
-      const deltaLink = await this.microsoft_onedrive.getLatestDeltaLink(deltaLinkParams);
+      const deltaLink = await this.onedrive.getLatestDeltaLink(deltaLinkParams);
       this._setDeltaLink(deltaLink);
     },
     async deactivate() {
@@ -74,7 +69,7 @@ module.exports = {
       const hookOpts = {
         expirationDateTime: this._getNextExpirationDateTime(),
       };
-      const hookId = await this.microsoft_onedrive.createHook(this.http.endpoint, hookOpts);
+      const hookId = await this.onedrive.createHook(this.http.endpoint, hookOpts);
       this._setHookId(hookId);
     },
     _renewSubscription() {
@@ -82,11 +77,11 @@ module.exports = {
         expirationDateTime: this._getNextExpirationDateTime(),
       };
       const hookId = this._getHookId();
-      return this.microsoft_onedrive.updateHook(hookId, hookOpts);
+      return this.onedrive.updateHook(hookId, hookOpts);
     },
     async _deactivateSubscription() {
       const hookId = this._getHookId();
-      await this.microsoft_onedrive.deleteHook(hookId);
+      await this.onedrive.deleteHook(hookId);
       this._setHookId(null);
     },
     _getHookId() {
@@ -115,7 +110,7 @@ module.exports = {
       });
     },
     async _processEventsFromDeltaLink(deltaLink) {
-      const itemsStream = this.microsoft_onedrive.scanDeltaItems(deltaLink);
+      const itemsStream = this.onedrive.scanDeltaItems(deltaLink);
 
       while (true) {
         // We iterate through the `itemsStream` generator using explicit calls to
@@ -134,7 +129,11 @@ module.exports = {
           break;
         }
 
-        if (!this.isItemRelevant(value)) {
+        const shouldSkipItem = (
+          !this.isItemTypeRelevant(value) ||
+          !this.isItemRelevant(value)
+        );
+        if (shouldSkipItem) {
           // If the retrieved item is not relevant to the event source, we skip it
           continue;
         }
@@ -147,7 +146,7 @@ module.exports = {
     /**
      * The purpose of this method is for the different OneDrive event sources to
      * parameterize the OneDrive Delta Link to use. These parameters will be
-     * forwarded to the `microsoft_onedrive.getLatestDeltaLink` method.
+     * forwarded to the `onedrive.getLatestDeltaLink` method.
      *
      * @returns an object containing options/parameters to use when querying the
      * OneDrive API for a Delta Link
@@ -161,12 +160,25 @@ module.exports = {
      * source has to go through a collection of items, some of which should be
      * skipped/ignored.
      *
-     * @param {Object}  item the item under evaluation
+     * @param {Object}  driveItem the item under evaluation
      * @returns a boolean value that indicates whether the item should be
      * processed or not
      */
     isItemRelevant() {
-      throw new Error("isItemRelevant is not implemented");
+      return true;
+    },
+    /**
+     * This method determines whether the type of the item (e.g. a file, folder,
+     * video, etc.) that's about to be processed is relevant to the event source
+     * or not. This is helpful when the event source has to go through a
+     * collection of items, some of which should be skipped/ignored.
+     *
+     * @param {Object}  driveItem the item under evaluation
+     * @returns a boolean value that indicates whether the item should be
+     * processed or not
+     */
+    isItemTypeRelevant() {
+      return true;
     },
     /**
      * This method generates the metadata that accompanies an event being
@@ -178,7 +190,9 @@ module.exports = {
      * @returns an event metadata object containing, as described in the docs
      */
     generateMeta() {
-      throw new Error("generateMeta is not implemented");
+      return {
+        ts: Date.now(),
+      };
     },
     /**
      * This method emits an event which payload is set to the provided [OneDrive

@@ -5,7 +5,7 @@ module.exports = {
   key: "microsoft_onedrive-new-file",
   name: "New File (Instant)",
   description: "Emit an event when a new file is added to a specific drive in OneDrive",
-  version: "0.0.1",
+  version: "0.0.2",
   dedupe: "unique",
   hooks: {
     ...common.hooks,
@@ -27,6 +27,9 @@ module.exports = {
     },
     _setMaxCreatedTimestamp(maxCreatedTimestamp = Date.now()) {
       this.db.set("maxCreatedTimestamp", maxCreatedTimestamp);
+    },
+    isItemTypeRelevant(driveItem) {
+      return !driveItem.deleted;
     },
     isItemRelevant(driveItem) {
       // Drive items that were created prior to the latest cached creation time

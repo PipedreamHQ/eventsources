@@ -1,11 +1,15 @@
 const base = require("../new-file/new-file");
+const { toSingleLineString } = require("../common/utils");
 
 module.exports = {
   ...base,
   key: "microsoft_onedrive-new-file-in-folder",
   name: "New File in Folder (Instant)",
-  description: "Emit an event when a new file is added to a specific folder in a OneDrive drive",
-  version: "0.0.1",
+  description: toSingleLineString(`
+    Emit an event when a new file is added to a
+    specific directory tree in a OneDrive drive
+  `),
+  version: "0.0.2",
   dedupe: "unique",
   props: {
     ...base.props,

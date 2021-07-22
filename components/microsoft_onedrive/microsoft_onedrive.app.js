@@ -40,13 +40,13 @@ module.exports = {
      * This is a utility method that returns the path to a OneDrive item based
      * on its identifier, or the root if an identifier is not specified.
      *
-     * @param {string}  [itemId] the OneDrive item identifier. When not
+     * @param {string}  [driveItemId] the OneDrive item identifier. When not
      * provided, the method returns the path of the root item.
      * @returns the path to the specified drive
      */
-    _getDriveItemPath(itemId) {
-      return itemId
-        ? `/items/${itemId}`
+    _getDriveItemPath(driveItemId) {
+      return driveItemId
+        ? `/items/${driveItemId}`
         : "/root";
     },
     /**
@@ -102,8 +102,8 @@ module.exports = {
     } = {}) {
       const baseUrl = this._apiUrl();
       const drivePath = this._getDrivePath(driveId);
-      const itemPath = this._getDriveItemPath(folderId);
-      return `${baseUrl}${drivePath}${itemPath}/delta`;
+      const driveItemPath = this._getDriveItemPath(folderId);
+      return `${baseUrl}${drivePath}${driveItemPath}/delta`;
     },
     /**
      * This is a utility method that returns the API URL of the endpoint
@@ -144,8 +144,8 @@ module.exports = {
     } = {}) {
       const baseUrl = this._apiUrl();
       const drivePath = this._getDrivePath(driveId);
-      const itemPath = this._getDriveItemPath(folderId);
-      return `${baseUrl}${drivePath}${itemPath}/children`;
+      const driveItemPath = this._getDriveItemPath(folderId);
+      return `${baseUrl}${drivePath}${driveItemPath}/children`;
     },
     _subscriptionsEndpoint(id) {
       const baseUrl = this._apiUrl();
@@ -411,13 +411,13 @@ module.exports = {
         const {
           "@odata.nextLink": nextLink,
           "@odata.deltaLink": nextDeltaLink,
-          "value": items,
+          "value": driveItems,
         } = data;
-        for (const item of items) {
-          yield item;
+        for (const driveItem of driveItems) {
+          yield driveItem;
         }
 
-        if (items.length === 0 || nextDeltaLink) {
+        if (driveItems.length === 0 || nextDeltaLink) {
           return nextDeltaLink;
         }
 
