@@ -4,7 +4,7 @@ module.exports = {
   key: "google_drive-new-shared-drive",
   name: "New Shared Drive",
   description: "Emits a new event any time a shared drive is created.",
-  version: "0.0.1",
+  version: "0.0.2",
   dedupe: "unique",
   props: {
     googleDrive,
@@ -16,7 +16,25 @@ module.exports = {
       },
     },
   },
+  hooks: {
+    async deploy() {
+      const { drives: initDrives } = await this.googleDrive.listDrivesInPage();
+      for (const drive of initDrives) {
+        const newDrive = await this.googleDrive.getDrive(drive.id);
+        const meta = this.generateMeta(newDrive);
+        this.$emit(newDrive, meta);
+      }
+
+      this._setKnownDrives(initDrives.map((drive) => drive.id));
+    },
+  },
   methods: {
+    _getKnownDrives() {
+      return this.db.get("driveIds");
+    },
+    _setKnownDrives(driveIds) {
+      this.db.set("driveIds", Array.from(driveIds));
+    },
     generateMeta(drive) {
       const ts = new Date(drive.createdTime).getTime();
       return {
@@ -27,15 +45,21 @@ module.exports = {
     },
   },
   async run() {
-    const driveIds = this.db.get("driveIds") || [];
-    const { options: drives } = await this.googleDrive.listDrives(null);
-    for (const drive of drives) {
-      if (driveIds.includes(drive.value) || drive.value == "myDrive") continue;
-      driveIds.push(drive.value);
-      const newDrive = await this.googleDrive.getDrive(drive.value);
+    const knownDrives = new Set(this._getKnownDrives());
+    const drivesStream = this.googleDrive.listDrives();
+    for await (const drive of drivesStream) {
+      if (knownDrives.has(drive.id)) {
+        // We've already seen this drive, so we skip it
+        continue;
+      }
+
+      knownDrives.add(drive.id);
+
+      const newDrive = await this.googleDrive.getDrive(drive.id);
       const meta = this.generateMeta(newDrive);
       this.$emit(newDrive, meta);
     }
-    this.db.set("driveIds", driveIds);
+
+    this._setKnownDrives(knownDrives);
   },
 };

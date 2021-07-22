@@ -128,40 +128,43 @@ module.exports = {
         .map(({ sheetId }) => (sheetId.toString()));
     },
     async getModifiedSheet(pageToken, driveId, sheetID) {
-      const {
-        changedFiles,
-        newStartPageToken,
-      } = await this.googleSheets.getChanges(pageToken, driveId);
-      const file = changedFiles
-        .filter((file) => file.mimeType.includes("spreadsheet"))
-        .filter((file) => sheetID === file.id)
-        .shift();
-      return {
-        file,
-        pageToken: newStartPageToken,
-      };
+      const changedFilesStream = this.googleSheets.getChanges(pageToken, driveId);
+      for await (const changedFilesPage of changedFilesStream) {
+        const {
+          changedFiles,
+          newStartPageToken = pageToken,
+        } = changedFilesPage;
+        this._setPageToken(newStartPageToken);
+
+        const file = changedFiles
+          .filter((file) => file.mimeType.includes("spreadsheet"))
+          .filter((file) => sheetID === file.id)
+          .shift();
+
+        if (file) {
+          // One of the changed files is the one that the event source is
+          // watching, so we can stop going through the list of changed files
+          // and return the file reference at this point
+          return file;
+        }
+      }
     },
     async getSpreadsheetToProcess(event) {
       const { headers } = event;
       const subscription = this._getSubscription();
       const channelID = this._getChannelID();
-      const pageToken = this._getPageToken();
-
       if (!this.googleSheets.checkHeaders(headers, subscription, channelID)) {
         return;
       }
 
+      const pageToken = this._getPageToken();
       const driveId = this.getDriveId();
       const sheetId = this.getSheetId();
-      const {
-        file,
-        newPageToken,
-      } = await this.getModifiedSheet(
+      const file = await this.getModifiedSheet(
         pageToken,
         driveId,
         sheetId,
       );
-      if (newPageToken) this._setPageToken(newPageToken);
 
       if (!file) {
         console.log("No sheets were modified");
@@ -233,7 +236,7 @@ module.exports = {
     },
   },
   async run(event) {
-    if (event.interval_seconds) {
+    if (event.timestamp) {
       // Component was invoked by timer
       return this.renewSubscription();
     }

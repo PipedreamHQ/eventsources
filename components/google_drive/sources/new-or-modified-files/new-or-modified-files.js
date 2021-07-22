@@ -8,8 +8,12 @@
 // 1) The HTTP requests tied to changes in the user's Google Drive
 // 2) A timer that runs on regular intervals, renewing the notification channel as needed
 
-const googleDrive = require("../../google_drive.app.js");
 const common = require("../common-webhook.js");
+const {
+  GOOGLE_DRIVE_NOTIFICATION_ADD,
+  GOOGLE_DRIVE_NOTIFICATION_CHANGE,
+  GOOGLE_DRIVE_NOTIFICATION_UPDATE,
+} = require("../../constants");
 
 module.exports = {
   ...common,
@@ -17,29 +21,33 @@ module.exports = {
   name: "New or Modified Files",
   description:
     "Emits a new event any time any file in your linked Google Drive is added, modified, or deleted",
-  version: "0.0.12",
+  version: "0.0.13",
   // Dedupe events based on the "x-goog-message-number" header for the target channel:
   // https://developers.google.com/drive/api/v3/push#making-watch-requests
   dedupe: "unique",
-  props: {
-    ...common.props,
-    updateTypes: { propDefinition: [googleDrive, "updateTypes"] },
-    watchForPropertiesChanges: {
-      propDefinition: [googleDrive, "watchForPropertiesChanges"],
-    },
-  },
   methods: {
-    async processChanges(headers, pageToken) {
+    ...common.methods,
+    getUpdateTypes() {
+      return [
+        GOOGLE_DRIVE_NOTIFICATION_ADD,
+        GOOGLE_DRIVE_NOTIFICATION_CHANGE,
+        GOOGLE_DRIVE_NOTIFICATION_UPDATE,
+      ];
+    },
+    generateMeta(data, headers) {
       const {
-        changedFiles,
-        newStartPageToken,
-      } = await this.googleDrive.getChanges(
-        pageToken,
-        this.drive === "myDrive" ? null : this.drive
-      );
-
-      this.db.set("pageToken", newStartPageToken);
-
+        id: fileId,
+        name: summary,
+        modifiedTime: tsString,
+      } = data;
+      const { "x-goog-message-number": eventId } = headers;
+      return {
+        id: `${fileId}-${eventId}`,
+        summary,
+        ts: Date.parse(tsString),
+      };
+    },
+    async processChanges(changedFiles, headers) {
       for (const file of changedFiles) {
         const eventToEmit = {
           file,
@@ -49,11 +57,8 @@ module.exports = {
             changed: headers["x-goog-changed"], // "Additional details about the changes. Possible values: content, parents, children, permissions"
           },
         };
-
-        this.$emit(eventToEmit, {
-          summary: file.name,
-          id: headers["x-goog-message-number"],
-        });
+        const meta = this.generateMeta(file, headers);
+        this.$emit(eventToEmit, meta);
       }
     },
   },

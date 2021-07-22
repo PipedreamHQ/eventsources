@@ -7,8 +7,10 @@
 // 1) The HTTP requests tied to changes in the user's Google Drive
 // 2) A timer that runs on regular intervals, renewing the notification channel as needed
 
-const { v4: uuid } = require("uuid");
+const cronParser = require("cron-parser");
 const includes = require("lodash/includes");
+const { v4: uuid } = require("uuid");
+
 const googleDrive = require("../../google_drive.app.js");
 const common = require("../common-webhook.js");
 
@@ -18,7 +20,7 @@ module.exports = {
   name: "Changes to Specific Files",
   description:
     "Watches for changes to specific files, emitting an event any time a change is made to one of those files",
-  version: "0.0.10",
+  version: "0.0.11",
   // Dedupe events based on the "x-goog-message-number" header for the target channel:
   // https://developers.google.com/drive/api/v3/push#making-watch-requests
   dedupe: "unique",
@@ -29,31 +31,35 @@ module.exports = {
       label: "Files",
       description: "The files you want to watch for changes.",
       optional: true,
-      async options({ prevContext }) {
+      default: [],
+      options({ prevContext }) {
         const { nextPageToken } = prevContext;
-        if (this.drive === "myDrive") {
-          return await this.googleDrive.listFiles({ pageToken: nextPageToken });
-        }
-
-        return await this.googleDrive.listFiles({
-          pageToken: nextPageToken,
-          corpora: "drive",
-          driveId: this.drive,
-          includeItemsFromAllDrives: true,
-          supportsAllDrives: true,
-        });
+        const baseOpts = {};
+        const opts = this.drive === "myDrive"
+          ? baseOpts
+          : {
+            ...baseOpts,
+            corpora: "drive",
+            driveId: this.drive,
+            includeItemsFromAllDrives: true,
+            supportsAllDrives: true,
+          };
+        return this.googleDrive.listFilesOptions(nextPageToken, opts);
       },
     },
-    updateTypes: { propDefinition: [googleDrive, "updateTypes"] },
-    watchForPropertiesChanges: {
-      propDefinition: [googleDrive, "watchForPropertiesChanges"],
+    updateTypes: {
+      propDefinition: [
+        googleDrive,
+        "updateTypes",
+      ],
     },
   },
   hooks: {
     ...common.hooks,
     async activate() {
-      // Called when a componenent is created or updated. Handles all the logic
-      // for starting and stopping watch notifications tied to the desired files.
+      // Called when a component is created or updated. Handles all the logic
+      // for starting and stopping watch notifications tied to the desired
+      // files.
 
       // You can pass the same channel ID in watch requests for multiple files, so
       // our channel ID is fixed for this component to simplify the state we have to
@@ -66,14 +72,20 @@ module.exports = {
       let subscriptions = this.db.get("subscriptions") || {};
 
       for (const fileID of this.files) {
-        const { expiration, resourceId } = await this.googleDrive.watchFile(
+        const {
+          expiration,
+          resourceId,
+        } = await this.googleDrive.watchFile(
           channelID,
           this.http.endpoint,
-          fileID
+          fileID,
         );
         // The fileID must be kept with the subscription metadata so we can
         // renew the watch request for this specific file when it expires.
-        subscriptions[resourceId] = { expiration, fileID };
+        subscriptions[resourceId] = {
+          expiration,
+          fileID,
+        };
       }
 
       // Save metadata on the subscription so we can stop / renew later
@@ -84,7 +96,7 @@ module.exports = {
       const channelID = this.db.get("channelID");
       if (!channelID) {
         console.log(
-          "Channel not found, cannot stop notifications for non-existent channel"
+          "Channel not found, cannot stop notifications for non-existent channel",
         );
         return;
       }
@@ -99,6 +111,23 @@ module.exports = {
       this.db.set("channelID", null);
     },
   },
+  methods: {
+    ...common.methods,
+    _getNextTimerEventTimestamp(event) {
+      if (event.cron) {
+        return cronParser
+          .parseExpression(event.cron)
+          .next()
+          .getTime();
+      }
+      if (event.interval_seconds) {
+        return Date.now() + event.interval_seconds * 1000;
+      }
+    },
+    getUpdateTypes() {
+      return this.updateTypes;
+    },
+  },
   async run(event) {
     // This function is polymorphic: it can be triggered as a cron job, to make sure we renew
     // watch requests for specific files, or via HTTP request (the change payloads from Google)
@@ -107,27 +136,34 @@ module.exports = {
     const channelID = this.db.get("channelID");
 
     // Component was invoked by timer
-    if (event.interval_seconds) {
-      for (const [currentResourceId, metadata] of Object.entries(
-        subscriptions
-      )) {
+    if (event.timestamp) {
+      for (const [
+        currentResourceId,
+        metadata,
+      ] of Object.entries(subscriptions)) {
         const { fileID } = metadata;
         // If the subscription for this resource will expire before the next run,
         // stop the existing subscription and renew
-        if (metadata.expiration < +new Date() + event.interval_seconds * 1000) {
+        if (metadata.expiration < this._getNextTimerEventTimestamp(event)) {
           console.log(
-            `Notifications for resource ${currentResourceId} are expiring at ${metadata.expiration}. Renewing`
+            `Notifications for resource ${currentResourceId} are expiring at ${metadata.expiration}. Renewing`,
           );
           await this.googleDrive.stopNotifications(
             channelID,
-            currentResourceId
+            currentResourceId,
           );
-          const { expiration, resourceId } = await this.googleDrive.watchFile(
+          const {
+            expiration,
+            resourceId,
+          } = await this.googleDrive.watchFile(
             channelID,
             this.http.endpoint,
-            fileID
+            fileID,
           );
-          subscriptions[resourceId] = { expiration, fileID };
+          subscriptions[resourceId] = {
+            expiration,
+            fileID,
+          };
         }
       }
 
@@ -150,14 +186,14 @@ module.exports = {
     const incomingChannelID = headers["x-goog-channel-id"];
     if (incomingChannelID !== channelID) {
       console.log(
-        `Channel ID of ${incomingChannelID} not equal to deployed component channel of ${channelID}`
+        `Channel ID of ${incomingChannelID} not equal to deployed component channel of ${channelID}`,
       );
       return;
     }
 
-    if (!subscriptions.hasOwnProperty(headers["x-goog-resource-id"])) {
+    if (subscriptions[headers["x-goog-resource-id"]] === undefined) {
       console.log(
-        `Resource ID of ${headers["x-goog-resource-id"]} not currently being tracked. Exiting`
+        `Resource ID of ${headers["x-goog-resource-id"]} not currently being tracked. Exiting`,
       );
       return;
     }
@@ -165,7 +201,7 @@ module.exports = {
     if (!includes(this.updateTypes, headers["x-goog-resource-state"])) {
       console.log(
         `Update type ${headers["x-goog-resource-state"]} not in list of updates to watch: `,
-        this.updateTypes
+        this.updateTypes,
       );
       return;
     }
@@ -179,13 +215,13 @@ module.exports = {
       headers["x-goog-changed"] === "properties"
     ) {
       console.log(
-        "Change to properties only, which this component is set to ignore. Exiting"
+        "Change to properties only, which this component is set to ignore. Exiting",
       );
       return;
     }
 
     const file = await this.googleDrive.getFileMetadata(
-      headers["x-goog-resource-uri"]
+      headers["x-goog-resource-uri"],
     );
 
     if (!file || !Object.keys(file).length) {
